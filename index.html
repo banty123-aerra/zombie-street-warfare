@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus Survival: Global Onslaught</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        canvas { display: block; }
+        
+        #ui-layer {
+            position: absolute; top: 20px; left: 20px; color: #0f0;
+            text-shadow: 2px 2px #000; pointer-events: none;
+            z-index: 10;
+        }
+        .stat-box { background: rgba(0, 20, 0, 0.8); border: 1px solid #0f0; padding: 12px; margin-bottom: 8px; border-radius: 8px; min-width: 200px; }
+        
+        #minimap {
+            position: absolute; bottom: 30px; right: 30px;
+            width: 160px; height: 160px;
+            background: rgba(0, 30, 0, 0.9);
+            border: 3px solid #0f0; border-radius: 50%;
+            overflow: hidden; box-shadow: 0 0 20px #0f0;
+        }
+        #player-dot {
+            position: absolute; width: 10px; height: 10px;
+            background: #ff0000; border-radius: 50%;
+            top: 50%; left: 50%; transform: translate(-50%, -50%);
+            box-shadow: 0 0 10px red;
+        }
+        .zombie-dot { position: absolute; width: 6px; height: 6px; background: #00ff00; border-radius: 50%; }
+        #location-tag { color: #ffff00; font-weight: bold; font-size: 1.1em; border-left: 5px solid #ffff00; }
+        
+        #loading-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: black; color: #0f0; display: flex; 
+            justify-content: center; align-items: center; z-index: 100;
+            font-size: 2em; flex-direction: column;
+        }
+    </style>
+</head>
+<body>
+
+<div id="loading-screen">
+    <div>INITIALIZING SATELLITE...</div>
+    <div style="font-size: 0.5em; margin-top: 10px;">Please Allow Location for GPS Combat</div>
+</div>
+
+<div id="ui-layer">
+    <div class="stat-box" id="location-tag">📍 SCANNING AREA...</div>
+    <div class="stat-box">COMMANDER: SIDDHARTH</div>
+    <div class="stat-box">CASH: $<span id="cash">2500</span> | SCORE: <span id="score">0</span></div>
+    <div class="stat-box">HEALTH: <span id="health">100</span>%</div>
+</div>
+
+<div id="minimap">
+    <div id="player-dot"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+    // --- LOCATION TRACKING LOGIC ---
+    async function updateLocation() {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(async (position) => {
+                const lat = position.coords.latitude;
+                const lon = position.coords.longitude;
+                try {
+                    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`);
+                    const data = await res.json();
+                    const area = data.address.city || data.address.town || data.address.village || data.address.suburb || "UNKNOWN SECTOR";
+                    document.getElementById('location-tag').innerText = `📍 AREA: ${area.toUpperCase()}, ${data.address.state.toUpperCase()}`;
+                    document.getElementById('loading-screen').style.display = 'none';
+                } catch (e) {
+                    document.getElementById('location-tag').innerText = "📍 AREA: NALGONDA (OFFLINE)";
+                    document.getElementById('loading-screen').style.display = 'none';
+                }
+            }, () => {
+                document.getElementById('location-tag').innerText = "📍 AREA: NALGONDA (GPS DENIED)";
+                document.getElementById('loading-screen').style.display = 'none';
+            });
+        }
+    }
+    updateLocation();
+
+    // --- 3D ENGINE ---
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x000800, 0.04);
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    scene.add(new THREE.AmbientLight(0x404040, 2.5));
+    const playerLight = new THREE.PointLight(0x00ff00, 1.5, 20);
+    scene.add(playerLight);
+
+    const grid = new THREE.GridHelper(500, 100, 0x004400, 0x001100);
+    scene.add(grid);
+
+    const playerGeo = new THREE.CylinderGeometry(0.6, 0.6, 2, 12);
+    const playerMat = new THREE.MeshPhongMaterial({ color: 0xff0000 });
+    const player = new THREE.Mesh(playerGeo, playerMat);
+    player.position.y = 1;
+    scene.add(player);
+
+    const zombies = [];
+    const zombieGeo = new THREE.BoxGeometry(1.2, 2.5, 1.2);
+    const zombieMat = new THREE.MeshPhongMaterial({ color: 0x33ff33 });
+
+    function spawnZombie() {
+        const z = new THREE.Mesh(zombieGeo, zombieMat);
+        z.position.set((Math.random()-0.5)*150, 1.25, (Math.random()-0.5)*150);
+        scene.add(z);
+        const dot = document.createElement('div');
+        dot.className = 'zombie-dot';
+        document.getElementById('minimap').appendChild(dot);
+        zombies.push({ mesh: z, dot: dot });
+    }
+    for(let i=0; i<12; i++) spawnZombie();
+
+    const keys = {};
+    window.onkeydown = (e) => keys[e.key.toLowerCase()] = true;
+    window.onkeyup = (e) => keys[e.key.toLowerCase()] = false;
+
+    const bullets = [];
+    window.onclick = () => {
+        const bGeo = new THREE.SphereGeometry(0.25);
+        const bMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+        const b = new THREE.Mesh(bGeo, bMat);
+        b.position.copy(player.position);
+        const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(player.quaternion);
+        b.velocity = dir.multiplyScalar(1.2);
+        scene.add(b);
+        bullets.push(b);
+    };
+
+    let score = 0, cash = 2500, health = 100;
+
+    function animate() {
+        requestAnimationFrame(animate);
+        if (keys['w']) player.translateZ(-0.3);
+        if (keys['s']) player.translateZ(0.3);
+        if (keys['a']) player.rotation.y += 0.06;
+        if (keys['d']) player.rotation.y -= 0.06;
+
+        playerLight.position.copy(player.position);
+        camera.position.set(player.position.x, player.position.y + 12, player.position.z + 18);
+        camera.lookAt(player.position);
+
+        zombies.forEach((z, idx) => {
+            z.mesh.lookAt(player.position);
+            z.mesh.translateZ(0.07);
+            const mapX = (z.mesh.position.x - player.position.x) + 80;
+            const mapY = (z.mesh.position.z - player.position.z) + 80;
+            z.dot.style.left = mapX + 'px';
+            z.dot.style.top = mapY + 'px';
+
+            if(z.mesh.position.distanceTo(player.position) < 1.8) {
+                health -= 0.05;
+                document.getElementById('health').innerText = Math.max(0, Math.floor(health));
+                if(health <= 0) alert("GAME OVER! SATELLITE CONNECTION LOST.");
+            }
+        });
+
+        bullets.forEach((b, bIdx) => {
+            b.position.add(b.velocity);
+            zombies.forEach((z, zIdx) => {
+                if(b.position.distanceTo(z.mesh.position) < 2.5) {
+                    scene.remove(z.mesh); z.dot.remove();
+                    zombies.splice(zIdx, 1); scene.remove(b); bullets.splice(bIdx, 1);
+                    score += 10; cash += 50;
+                    document.getElementById('score').innerText = score;
+                    document.getElementById('cash').innerText = cash;
+                    spawnZombie();
+                }
+            });
+        });
+        renderer.render(scene, camera);
+    }
+    animate();
+</script>
+</body>
+</html>
