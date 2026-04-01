@@ -3,57 +3,142 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Siddharth: Tactical Survival</title>
+    <title>Siddharth: Cyber Racer 3D</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; }
-        #ui { position: absolute; top: 20px; left: 20px; color: #fff; pointer-events: none; z-index: 10; }
-        .hud { background: rgba(0, 20, 0, 0.8); padding: 15px; border-left: 4px solid #00ff00; margin-bottom: 10px; border-radius: 0 10px 10px 0; min-width: 200px; }
-        #crosshair { position: fixed; top: 50%; left: 50%; width: 24px; height: 24px; border: 2px solid rgba(0, 255, 0, 0.5); border-radius: 50%; transform: translate(-50%, -50%); }
-        #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; color: #0f0; display: flex; justify-content: center; align-items: center; z-index: 100; font-size: 1.5em; flex-direction: column; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Orbitron', sans-serif; }
+        #ui { position: absolute; top: 20px; left: 20px; color: #00f0ff; pointer-events: none; z-index: 10; }
+        .stats { background: rgba(0, 0, 20, 0.8); padding: 15px; border: 1px solid #00f0ff; border-radius: 5px; margin-bottom: 10px; text-shadow: 0 0 10px #00f0ff; }
+        #speedometer { position: absolute; bottom: 30px; right: 30px; color: #ff0055; font-size: 2em; font-weight: bold; }
+        #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; color: #00f0ff; display: flex; justify-content: center; align-items: center; z-index: 100; font-size: 2em; }
     </style>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap" rel="stylesheet">
 </head>
 <body>
 
-<div id="loading">
-    <div>DEPLOYING COMMANDER SIDDHARTH...</div>
-    <div style="font-size: 0.6em; margin-top: 10px;">Loading 3D Tactical Assets...</div>
-</div>
+<div id="loading">LOADING ENGINE...</div>
 
 <div id="ui">
-    <div class="hud" id="location">📍 GPS: SEARCHING...</div>
-    <div class="hud">UNIT: ELITE SOLDIER</div>
-    <div class="hud">KILLS: <span id="score">0</span> | HEALTH: <span id="hp">100</span>%</div>
+    <div class="stats">DRIVER: SIDDHARTH</div>
+    <div class="stats">SCORE: <span id="score">0</span></div>
+    <div class="stats" id="location">📍 GPS: SEARCHING...</div>
 </div>
-<div id="crosshair"></div>
+
+<div id="speedometer"><span id="speed">0</span> KM/H</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 
 <script>
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x020205);
-    scene.fog = new THREE.FogExp2(0x000000, 0.03);
-
+    scene.fog = new THREE.FogExp2(0x000011, 0.02);
+    
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.shadowMap.enabled = true;
     document.body.appendChild(renderer.domElement);
 
-    // Realistic Lighting
-    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-    const sun = new THREE.DirectionalLight(0x4444ff, 1);
-    sun.position.set(10, 20, 10);
-    scene.add(sun);
+    // Lights
+    const light = new THREE.DirectionalLight(0xffffff, 1);
+    light.position.set(0, 10, 10);
+    scene.add(light);
+    scene.add(new THREE.AmbientLight(0x404040, 2));
 
-    // Ground with Dark Grid
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), new THREE.MeshStandardMaterial({color: 0x0a0a0a, roughness: 0.8}));
-    ground.rotation.x = -Math.PI / 2;
-    ground.receiveShadow = true;
-    scene.add(ground);
+    // Road (Infinite Effect)
+    const roadGeo = new THREE.PlaneGeometry(20, 1000);
+    const roadMat = new THREE.MeshPhongMaterial({ color: 0x111111 });
+    const road = new THREE.Mesh(roadGeo, roadMat);
+    road.rotation.x = -Math.PI / 2;
+    scene.add(road);
 
-    const loader = new THREE.GLTFLoader();
-    let playerModel;
+    // Side Lines (Neon Effect)
+    const lineGeo = new THREE.PlaneGeometry(0.2, 1000);
+    const lineMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
+    const leftLine = new THREE.Mesh(lineGeo, lineMat);
+    leftLine.position.set(-10, 0.01, 0);
+    leftLine.rotation.x = -Math.PI / 2;
+    scene.add(leftLine);
 
-    // --- LOADING REAL SOLDIER MODEL ---
-    loader.load('
+    const rightLine = leftLine.clone();
+    rightLine.position.x = 10;
+    scene.add(rightLine);
+
+    // --- CREATE 3D CAR MODEL ---
+    const carGroup = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.6, 2.5), new THREE.MeshPhongMaterial({ color: 0xff0055 }));
+    body.position.y = 0.5;
+    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1, 0.5, 1.2), new THREE.MeshPhongMaterial({ color: 0x111111 }));
+    cabin.position.set(0, 0.9, -0.2);
+    carGroup.add(body, cabin);
+    scene.add(carGroup);
+
+    // Obstacles
+    const obstacles = [];
+    function spawnObstacle() {
+        const obsGeo = new THREE.BoxGeometry(2, 2, 2);
+        const obsMat = new THREE.MeshPhongMaterial({ color: 0xffff00 });
+        const obs = new THREE.Mesh(obsGeo, obsMat);
+        obs.position.set((Math.random() - 0.5) * 15, 1, -100);
+        scene.add(obs);
+        obstacles.push(obs);
+    }
+
+    const keys = {};
+    window.onkeydown = (e) => keys[e.key.toLowerCase()] = true;
+    window.onkeyup = (e) => keys[e.key.toLowerCase()] = false;
+
+    let score = 0, speed = 0, gameActive = true;
+    document.getElementById('loading').style.display = 'none';
+
+    function animate() {
+        if (!gameActive) return;
+        requestAnimationFrame(animate);
+
+        // Movement
+        if (keys['a'] && carGroup.position.x > -8) carGroup.position.x -= 0.2;
+        if (keys['d'] && carGroup.position.x < 8) carGroup.position.x += 0.2;
+
+        speed = 120 + (score / 10);
+        document.getElementById('speed').innerText = Math.floor(speed);
+
+        // Road movement effect
+        road.position.z += 1.5;
+        if (road.position.z > 100) road.position.z = 0;
+        leftLine.position.z = road.position.z;
+        rightLine.position.z = road.position.z;
+
+        // Obstacle logic
+        if (Math.random() < 0.03) spawnObstacle();
+
+        obstacles.forEach((obs, i) => {
+            obs.position.z += 1.5;
+            // Collision Detection
+            if (obs.position.distanceTo(carGroup.position) < 2) {
+                gameActive = false;
+                alert("CRASHED! SCORE: " + score);
+                location.reload();
+            }
+            if (obs.position.z > 20) {
+                scene.remove(obs);
+                obstacles.splice(i, 1);
+                score += 10;
+                document.getElementById('score').innerText = score;
+            }
+        });
+
+        camera.position.set(carGroup.position.x, 5, carGroup.position.z + 10);
+        camera.lookAt(carGroup.position);
+
+        renderer.render(scene, camera);
+    }
+    animate();
+
+    // Location
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(async (p) => {
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${p.coords.latitude}&lon=${p.coords.longitude}`);
+            const data = await res.json();
+            document.getElementById('location').innerText = `📍 AREA: ${data.address.city || "NALGONDA"}`.toUpperCase();
+        });
+    }
+</script>
+</body>
+</html>
