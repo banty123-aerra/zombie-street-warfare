@@ -3,21 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Siddharth's Survival: Ultra Realistic</title>
+    <title>Siddharth: Tactical Survival</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; }
-        #ui { position: absolute; top: 20px; left: 20px; color: #fff; font-family: 'Orbitron', sans-serif; pointer-events: none; }
-        .card { background: rgba(0,0,0,0.6); padding: 15px; border: 1px solid #444; border-radius: 10px; margin-bottom: 10px; }
-        #crosshair { position: fixed; top: 50%; left: 50%; width: 30px; height: 30px; border: 2px solid rgba(255,255,255,0.5); border-radius: 50%; transform: translate(-50%, -50%); }
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; }
+        #ui { position: absolute; top: 20px; left: 20px; color: #fff; pointer-events: none; z-index: 10; }
+        .hud { background: rgba(0, 20, 0, 0.8); padding: 15px; border-left: 4px solid #00ff00; margin-bottom: 10px; border-radius: 0 10px 10px 0; min-width: 200px; }
+        #crosshair { position: fixed; top: 50%; left: 50%; width: 24px; height: 24px; border: 2px solid rgba(0, 255, 0, 0.5); border-radius: 50%; transform: translate(-50%, -50%); }
+        #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; color: #0f0; display: flex; justify-content: center; align-items: center; z-index: 100; font-size: 1.5em; flex-direction: column; }
     </style>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
 
+<div id="loading">
+    <div>DEPLOYING COMMANDER SIDDHARTH...</div>
+    <div style="font-size: 0.6em; margin-top: 10px;">Loading 3D Tactical Assets...</div>
+</div>
+
 <div id="ui">
-    <div class="card" id="loc">📍 SCANNING SECTOR...</div>
-    <div class="card">COMMANDER: SIDDHARTH</div>
-    <div class="card">KILLS: <span id="score">0</span> | HEALTH: <span id="hp">100</span>%</div>
+    <div class="hud" id="location">📍 GPS: SEARCHING...</div>
+    <div class="hud">UNIT: ELITE SOLDIER</div>
+    <div class="hud">KILLS: <span id="score">0</span> | HEALTH: <span id="hp">100</span>%</div>
 </div>
 <div id="crosshair"></div>
 
@@ -26,120 +31,29 @@
 
 <script>
     const scene = new THREE.Scene();
-    // ఆకాశం లాగా కనిపించడానికి Sky Color
     scene.background = new THREE.Color(0x020205);
-    scene.fog = new THREE.FogExp2(0x000000, 0.02);
+    scene.fog = new THREE.FogExp2(0x000000, 0.03);
 
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.toneMapping = THREE.ReinhardToneMapping;
+    renderer.shadowMap.enabled = true;
     document.body.appendChild(renderer.domElement);
 
     // Realistic Lighting
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.5);
-    scene.add(hemiLight);
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1);
-    dirLight.position.set(5, 10, 7);
-    scene.add(dirLight);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const sun = new THREE.DirectionalLight(0x4444ff, 1);
+    sun.position.set(10, 20, 10);
+    scene.add(sun);
 
-    // Ground with Texture (నేల వాస్తవంగా కనిపించడానికి)
-    const groundGeo = new THREE.PlaneGeometry(2000, 2000);
-    const groundMat = new THREE.MeshPhongMaterial({ color: 0x111111, shininess: 10 });
-    const ground = new THREE.Mesh(groundGeo, groundMat);
+    // Ground with Dark Grid
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), new THREE.MeshStandardMaterial({color: 0x0a0a0a, roughness: 0.8}));
     ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
     scene.add(ground);
 
     const loader = new THREE.GLTFLoader();
-    let playerModel, gunModel;
+    let playerModel;
 
-    // --- REALISTIC HERO MODEL ---
-    // ఇక్కడ మనం ఒక ఫ్రీ మ్యాన్ మోడల్ వాడుతున్నాం
-    loader.load('https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Soldier/glTF/Soldier.gltf', function(gltf) {
-        playerModel = gltf.scene;
-        playerModel.scale.set(1.5, 1.5, 1.5);
-        scene.add(playerModel);
-    });
-
-    const zombies = [];
-    function spawnZombie() {
-        // జోంబీల కోసం వేరే భయంకరమైన మోడల్స్ లోడ్ చేయొచ్చు, ప్రస్తుతం షేప్స్ ని Realistic గా మార్చాను
-        const zGeo = new THREE.CylinderGeometry(0.5, 0.5, 2, 16);
-        const zMat = new THREE.MeshStandardMaterial({ color: 0x2d3b2d, roughness: 0.8 });
-        const z = new THREE.Mesh(zGeo, zMat);
-        
-        const angle = Math.random() * Math.PI * 2;
-        const dist = 40 + Math.random() * 20;
-        z.position.set(Math.cos(angle)*dist, 1, Math.sin(angle)*dist);
-        scene.add(z);
-        zombies.push(z);
-    }
-    for(let i=0; i<10; i++) spawnZombie();
-
-    const keys = {};
-    window.onkeydown = (e) => keys[e.key.toLowerCase()] = true;
-    window.onkeyup = (e) => keys[e.key.toLowerCase()] = false;
-
-    const bullets = [];
-    window.onclick = () => {
-        const b = new THREE.Mesh(new THREE.SphereGeometry(0.15), new THREE.MeshBasicMaterial({ color: 0xff4400 }));
-        b.position.copy(playerModel.position);
-        b.position.y = 1.5;
-        const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(playerModel.quaternion);
-        b.velocity = dir.multiplyScalar(2.5);
-        scene.add(b);
-        bullets.push(b);
-    };
-
-    let score = 0, hp = 100;
-
-    function animate() {
-        requestAnimationFrame(animate);
-        if(!playerModel) return;
-
-        if (keys['w']) playerModel.translateZ(0.25);
-        if (keys['s']) playerModel.translateZ(-0.25);
-        if (keys['a']) playerModel.rotation.y += 0.05;
-        if (keys['d']) playerModel.rotation.y -= 0.05;
-
-        camera.position.lerp(new THREE.Vector3(playerModel.position.x, 10, playerModel.position.z + 15), 0.1);
-        camera.lookAt(playerModel.position);
-
-        zombies.forEach((z, i) => {
-            z.lookAt(playerModel.position);
-            z.translateZ(0.08);
-            if(z.position.distanceTo(playerModel.position) < 1.5) {
-                hp -= 0.2;
-                document.getElementById('hp').innerText = Math.max(0, Math.floor(hp));
-                if(hp <= 0) location.reload();
-            }
-        });
-
-        bullets.forEach((b, i) => {
-            b.position.add(b.velocity);
-            zombies.forEach((z, zi) => {
-                if(b.position.distanceTo(z.position) < 2) {
-                    scene.remove(z); zombies.splice(zi, 1);
-                    scene.remove(b); bullets.splice(i, 1);
-                    score++; document.getElementById('score').innerText = score;
-                    spawnZombie();
-                }
-            });
-        });
-        renderer.render(scene, camera);
-    }
-    animate();
-
-    // Location API
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(async (p) => {
-            try {
-                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${p.coords.latitude}&lon=${p.coords.longitude}`);
-                const data = await res.json();
-                document.getElementById('loc').innerText = `📍 AREA: ${data.address.city || "NALGONDA"}`;
-            } catch(e) { document.getElementById('loc').innerText = "📍 AREA: UNKNOWN"; }
-        });
-    }
-</script>
-</body>
-</html>
+    // --- LOADING REAL SOLDIER MODEL ---
+    loader.load('
