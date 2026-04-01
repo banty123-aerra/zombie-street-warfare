@@ -3,121 +3,105 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nexus Survival: Global Onslaught</title>
+    <title>Siddharth's 3D Outbreak</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        canvas { display: block; }
-        
-        #ui-layer {
-            position: absolute; top: 20px; left: 20px; color: #0f0;
-            text-shadow: 2px 2px #000; pointer-events: none;
-            z-index: 10;
-        }
-        .stat-box { background: rgba(0, 20, 0, 0.8); border: 1px solid #0f0; padding: 12px; margin-bottom: 8px; border-radius: 8px; min-width: 200px; }
-        
-        #minimap {
-            position: absolute; bottom: 30px; right: 30px;
-            width: 160px; height: 160px;
-            background: rgba(0, 30, 0, 0.9);
-            border: 3px solid #0f0; border-radius: 50%;
-            overflow: hidden; box-shadow: 0 0 20px #0f0;
-        }
-        #player-dot {
-            position: absolute; width: 10px; height: 10px;
-            background: #ff0000; border-radius: 50%;
-            top: 50%; left: 50%; transform: translate(-50%, -50%);
-            box-shadow: 0 0 10px red;
-        }
-        .zombie-dot { position: absolute; width: 6px; height: 6px; background: #00ff00; border-radius: 50%; }
-        #location-tag { color: #ffff00; font-weight: bold; font-size: 1.1em; border-left: 5px solid #ffff00; }
-        
-        #loading-screen {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: black; color: #0f0; display: flex; 
-            justify-content: center; align-items: center; z-index: 100;
-            font-size: 2em; flex-direction: column;
-        }
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Arial Black', Gadget, sans-serif; }
+        #overlay { position: absolute; top: 20px; left: 20px; color: #0f0; pointer-events: none; }
+        .stat { background: rgba(0, 40, 0, 0.8); padding: 15px; border-left: 5px solid #0f0; margin-bottom: 10px; box-shadow: 5px 5px 15px rgba(0,0,0,0.5); }
+        #crosshair { position: fixed; top: 50%; left: 50%; width: 20px; height: 20px; border: 2px solid red; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; }
     </style>
 </head>
 <body>
 
-<div id="loading-screen">
-    <div>INITIALIZING SATELLITE...</div>
-    <div style="font-size: 0.5em; margin-top: 10px;">Please Allow Location for GPS Combat</div>
+<div id="overlay">
+    <div class="stat" id="location">📍 GPS: INITIALIZING...</div>
+    <div class="stat">COMMANDER: SIDDHARTH</div>
+    <div class="stat">KILLS: <span id="score">0</span> | HP: <span id="hp">100</span>%</div>
 </div>
-
-<div id="ui-layer">
-    <div class="stat-box" id="location-tag">📍 SCANNING AREA...</div>
-    <div class="stat-box">COMMANDER: SIDDHARTH</div>
-    <div class="stat-box">CASH: $<span id="cash">2500</span> | SCORE: <span id="score">0</span></div>
-    <div class="stat-box">HEALTH: <span id="health">100</span>%</div>
-</div>
-
-<div id="minimap">
-    <div id="player-dot"></div>
-</div>
+<div id="crosshair"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
-    // --- LOCATION TRACKING LOGIC ---
-    async function updateLocation() {
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(async (position) => {
-                const lat = position.coords.latitude;
-                const lon = position.coords.longitude;
-                try {
-                    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`);
-                    const data = await res.json();
-                    const area = data.address.city || data.address.town || data.address.village || data.address.suburb || "UNKNOWN SECTOR";
-                    document.getElementById('location-tag').innerText = `📍 AREA: ${area.toUpperCase()}, ${data.address.state.toUpperCase()}`;
-                    document.getElementById('loading-screen').style.display = 'none';
-                } catch (e) {
-                    document.getElementById('location-tag').innerText = "📍 AREA: NALGONDA (OFFLINE)";
-                    document.getElementById('loading-screen').style.display = 'none';
-                }
-            }, () => {
-                document.getElementById('location-tag').innerText = "📍 AREA: NALGONDA (GPS DENIED)";
-                document.getElementById('loading-screen').style.display = 'none';
-            });
-        }
-    }
-    updateLocation();
-
-    // --- 3D ENGINE ---
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x000800, 0.04);
+    scene.background = new THREE.Color(0x050505);
+    scene.fog = new THREE.FogExp2(0x000000, 0.035);
+
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    scene.add(new THREE.AmbientLight(0x404040, 2.5));
-    const playerLight = new THREE.PointLight(0x00ff00, 1.5, 20);
-    scene.add(playerLight);
+    // Lights
+    scene.add(new THREE.AmbientLight(0x404040, 2));
+    const spot = new THREE.PointLight(0xffffff, 1, 100);
+    scene.add(spot);
 
-    const grid = new THREE.GridHelper(500, 100, 0x004400, 0x001100);
-    scene.add(grid);
+    // Ground
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), new THREE.MeshPhongMaterial({color: 0x1a1a1a}));
+    ground.rotation.x = -Math.PI / 2;
+    scene.add(ground);
 
-    const playerGeo = new THREE.CylinderGeometry(0.6, 0.6, 2, 12);
-    const playerMat = new THREE.MeshPhongMaterial({ color: 0xff0000 });
-    const player = new THREE.Mesh(playerGeo, playerMat);
-    player.position.y = 1;
+    // --- 3D HUMAN MODEL BUILDER ---
+    function create3DCharacter(isZombie) {
+        const group = new THREE.Group();
+        const skinMat = new THREE.MeshPhongMaterial({color: isZombie ? 0x557755 : 0xffdbac});
+        const clothMat = new THREE.MeshPhongMaterial({color: isZombie ? 0x224422 : 0x0000ff}); // Hero in Blue, Zombie in Dark Green
+
+        // Head
+        const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), skinMat);
+        head.position.y = 1.7;
+        group.add(head);
+
+        // Body
+        const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.8, 0.3), clothMat);
+        body.position.y = 1.1;
+        group.add(body);
+
+        // Arms
+        const armGeo = new THREE.BoxGeometry(0.15, 0.6, 0.15);
+        const leftArm = new THREE.Mesh(armGeo, skinMat);
+        leftArm.position.set(-0.4, 1.2, isZombie ? -0.3 : 0);
+        if(isZombie) leftArm.rotation.x = -Math.PI/2; // Zombies arms out!
+        group.add(leftArm);
+
+        const rightArm = leftArm.clone();
+        rightArm.position.x = 0.4;
+        group.add(rightArm);
+
+        // Legs
+        const legGeo = new THREE.BoxGeometry(0.2, 0.7, 0.2);
+        const leftLeg = new THREE.Mesh(legGeo, new THREE.MeshPhongMaterial({color: 0x222222}));
+        leftLeg.position.set(-0.15, 0.35, 0);
+        group.add(leftLeg);
+        const rightLeg = leftLeg.clone(); rightLeg.position.x = 0.15;
+        group.add(rightLeg);
+
+        return group;
+    }
+
+    const player = create3DCharacter(false);
     scene.add(player);
 
-    const zombies = [];
-    const zombieGeo = new THREE.BoxGeometry(1.2, 2.5, 1.2);
-    const zombieMat = new THREE.MeshPhongMaterial({ color: 0x33ff33 });
+    // --- ADD DETAILED GUN ---
+    const gunGroup = new THREE.Group();
+    const gunBody = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.2, 0.7), new THREE.MeshPhongMaterial({color: 0x111111}));
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.8), new THREE.MeshPhongMaterial({color: 0x333333}));
+    barrel.rotation.x = Math.PI/2;
+    barrel.position.z = -0.4;
+    gunGroup.add(gunBody, barrel);
+    gunGroup.position.set(0.4, 1.2, -0.4);
+    player.add(gunGroup);
 
+    const zombies = [];
     function spawnZombie() {
-        const z = new THREE.Mesh(zombieGeo, zombieMat);
-        z.position.set((Math.random()-0.5)*150, 1.25, (Math.random()-0.5)*150);
+        const z = create3DCharacter(true);
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 35 + Math.random() * 20;
+        z.position.set(player.position.x + Math.cos(angle)*dist, 0, player.position.z + Math.sin(angle)*dist);
         scene.add(z);
-        const dot = document.createElement('div');
-        dot.className = 'zombie-dot';
-        document.getElementById('minimap').appendChild(dot);
-        zombies.push({ mesh: z, dot: dot });
+        zombies.push(z);
     }
-    for(let i=0; i<12; i++) spawnZombie();
+    for(let i=0; i<15; i++) spawnZombie();
 
     const keys = {};
     window.onkeydown = (e) => keys[e.key.toLowerCase()] = true;
@@ -125,53 +109,45 @@
 
     const bullets = [];
     window.onclick = () => {
-        const bGeo = new THREE.SphereGeometry(0.25);
-        const bMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
-        const b = new THREE.Mesh(bGeo, bMat);
+        const b = new THREE.Mesh(new THREE.SphereGeometry(0.15), new THREE.MeshBasicMaterial({color: 0xffaa00}));
         b.position.copy(player.position);
-        const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(player.quaternion);
-        b.velocity = dir.multiplyScalar(1.2);
+        b.position.y = 1.3;
+        const dir = new THREE.Vector3(0,0,-1).applyQuaternion(player.quaternion);
+        b.velocity = dir.multiplyScalar(2.5);
         scene.add(b);
         bullets.push(b);
     };
 
-    let score = 0, cash = 2500, health = 100;
+    let score = 0, hp = 100;
 
     function animate() {
         requestAnimationFrame(animate);
-        if (keys['w']) player.translateZ(-0.3);
-        if (keys['s']) player.translateZ(0.3);
-        if (keys['a']) player.rotation.y += 0.06;
-        if (keys['d']) player.rotation.y -= 0.06;
+        if(keys['w']) player.translateZ(-0.25);
+        if(keys['s']) player.translateZ(0.25);
+        if(keys['a']) player.rotation.y += 0.07;
+        if(keys['d']) player.rotation.y -= 0.07;
 
-        playerLight.position.copy(player.position);
-        camera.position.set(player.position.x, player.position.y + 12, player.position.z + 18);
+        spot.position.set(player.position.x, 10, player.position.z);
+        camera.position.lerp(new THREE.Vector3(player.position.x, 12, player.position.z + 18), 0.1);
         camera.lookAt(player.position);
 
-        zombies.forEach((z, idx) => {
-            z.mesh.lookAt(player.position);
-            z.mesh.translateZ(0.07);
-            const mapX = (z.mesh.position.x - player.position.x) + 80;
-            const mapY = (z.mesh.position.z - player.position.z) + 80;
-            z.dot.style.left = mapX + 'px';
-            z.dot.style.top = mapY + 'px';
-
-            if(z.mesh.position.distanceTo(player.position) < 1.8) {
-                health -= 0.05;
-                document.getElementById('health').innerText = Math.max(0, Math.floor(health));
-                if(health <= 0) alert("GAME OVER! SATELLITE CONNECTION LOST.");
+        zombies.forEach((z, i) => {
+            z.lookAt(player.position);
+            z.translateZ(0.06);
+            if(z.position.distanceTo(player.position) < 1.5) {
+                hp -= 0.15;
+                document.getElementById('hp').innerText = Math.max(0, Math.floor(hp));
+                if(hp <= 0) { alert("SATELLITE DOWN! RETRY?"); location.reload(); }
             }
         });
 
-        bullets.forEach((b, bIdx) => {
+        bullets.forEach((b, i) => {
             b.position.add(b.velocity);
-            zombies.forEach((z, zIdx) => {
-                if(b.position.distanceTo(z.mesh.position) < 2.5) {
-                    scene.remove(z.mesh); z.dot.remove();
-                    zombies.splice(zIdx, 1); scene.remove(b); bullets.splice(bIdx, 1);
-                    score += 10; cash += 50;
-                    document.getElementById('score').innerText = score;
-                    document.getElementById('cash').innerText = cash;
+            zombies.forEach((z, zi) => {
+                if(b.position.distanceTo(z.position) < 2) {
+                    scene.remove(z); zombies.splice(zi, 1);
+                    scene.remove(b); bullets.splice(i, 1);
+                    score++; document.getElementById('score').innerText = score;
                     spawnZombie();
                 }
             });
@@ -179,6 +155,14 @@
         renderer.render(scene, camera);
     }
     animate();
+
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(async (p) => {
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${p.coords.latitude}&lon=${p.coords.longitude}`);
+            const data = await res.json();
+            document.getElementById('location').innerText = `📍 AREA: ${data.address.city || "NALGONDA"}`;
+        });
+    }
 </script>
 </body>
 </html>
